@@ -21,25 +21,6 @@ and serving business insights through two interactive AIBI dashboards — all on
 
 ---
 
-## 📋 Table of Contents
-
-1. [Project Overview](#-project-overview)
-2. [Architecture](#-architecture)
-3. [Tech Stack](#-tech-stack)
-4. [Repository Structure](#-repository-structure)
-5. [Data Sources & Synthetic Data](#-data-sources--synthetic-data)
-6. [Data Model](#-data-model)
-7. [Pipeline Stages](#-pipeline-stages)
-   - [Bronze — Ingestion](#bronze--ingestion)
-   - [Silver — Transformation](#silver--transformation)
-   - [Gold — Aggregation](#gold--aggregation)
-8. [AI Integration — Sentiment Analysis](#-ai-integration)
-9. [Dashboards](#-dashboards)
-10. [Orchestration](#-orchestration)
-11. [Unity Catalog Structure](#-unity-catalog-structure)
-
----
-
 ## 🎯 Project Overview
 
 This project simulates a **real-world lakehouse implementation** for a large Indian restaurant chain operating **5 locations across the UAE** (2 in Abu Dhabi, 2 in Dubai, 1 in Sharjah). It was built as a comprehensive end-to-end data engineering portfolio project covering ingestion, transformation, AI enrichment, and business intelligence — all within the Databricks ecosystem.
