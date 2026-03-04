@@ -693,6 +693,8 @@ Both dashboards are built in **Databricks AIBI** — no external BI tool. Data s
 
 **Audience:** Restaurant chain owner / operations manager
 
+![](diagrams/Restaurant Performance Insights_page-0001)
+
 | Widget | Source | Query Logic |
 |--------|--------|-------------|
 | Total Orders KPI | `d_sales_summary` | `SUM(total_orders)` across date range |
@@ -710,6 +712,7 @@ Both dashboards are built in **Databricks AIBI** — no external BI tool. Data s
 ### Dashboard 2: Review Insights
 
 **Audience:** Restaurant manager (per location)
+![](diagrams/Customer Reviews_page-0001.jpg)
 
 | Widget | Source | Query Logic |
 |--------|--------|-------------|
