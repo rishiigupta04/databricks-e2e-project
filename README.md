@@ -15,7 +15,7 @@
 transforming them through a medallion architecture, enriching reviews with LLM sentiment analysis,
 and serving business insights through two interactive AIBI dashboards — all on Databricks.**
 
-[Architecture](#-architecture) • [Tech Stack](#-tech-stack) • [Data Model](#-data-model) • [Pipeline Stages](#-pipeline-stages) • [AI Integration](#-ai-integration) • [Dashboards](#-dashboards) 
+[Architecture](#-architecture) • [Tech Stack](#-tech-stack) • [Data Model](#-data-model) • [Pipeline Stages](#-pipeline-stages) • [AI Integration](#-ai-integration--sentiment-analysis) • [Dashboards](#-dashboards) 
 
 </div>
 
