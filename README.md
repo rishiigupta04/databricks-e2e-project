@@ -1,8 +1,6 @@
-## Databricks Project (Restaurant ML/Analytics)
-
 ![](diagrams/project_architecture.png)
 
-# 🍛 Indian Restaurant Chain Analytics — End-to-End Lakehouse on Databricks
+# 🍛 Indian Restaurant Chain Analytics - End-to-End Lakehouse on Databricks
 
 <div align="center">
 
@@ -506,7 +504,6 @@ SILVER (2 rows from that one order):
 8,017 orders → ~24,000 item rows (avg 3 items per order)
 ```
 
-> **Design decision:** `customer_id` is deliberately excluded from `fact_order_items`. To find a customer's favourite item, you JOIN `fact_order_items` → `fact_orders` on `order_id`. This is intentional star schema discipline — avoids redundancy, enforces a single source of truth for customer data.
 
 #### Dimension Tables (via LakeFlow — Silver)
 
@@ -575,42 +572,6 @@ Silver Sources:
            │  is_vip (lifetime_spend >= 5000)                        │
            └────────────────────────────────────────────────────────┘
 ```
-
-**Favourite restaurant using ROW_NUMBER window function:**
-
-```python
-# Count visits per customer per restaurant
-visit_counts = fact_orders.groupBy("customer_id", "restaurant_id") \
-    .agg(countDistinct("order_id").alias("visit_count"))
-
-# Rank restaurants within each customer (most visited = rn 1)
-window = Window.partitionBy("customer_id").orderBy(desc("visit_count"))
-ranked  = visit_counts.withColumn("rn", row_number().over(window))
-
-# Keep only rank 1 = the favourite
-favourite = ranked.filter(col("rn") == 1).select("customer_id", "restaurant_id")
-```
-
-> **Why `ROW_NUMBER` not `RANK`?** `RANK()` assigns the same rank to tied values and then skips the next number. If two restaurants have the same visit count, both get rank 1 and both would return — breaking the one-row-per-customer constraint. `ROW_NUMBER()` always assigns unique sequential numbers even for ties, guaranteeing exactly one result per customer.
-
-#### Incremental Processing Results
-
-After running the Gold pipeline following 13 new streaming orders:
-
-```
-┌──────────────────────────┬──────────────────────────┬─────────────────────────────────────────┐
-│ Gold Table               │ Processing Mode          │ Reason                                  │
-├──────────────────────────┼──────────────────────────┼─────────────────────────────────────────┤
-│ d_sales_summary          │ ✅ INCREMENTAL           │ Partitioned by order_date. Engine        │
-│                          │                          │ identified only 1 date partition changed │
-├──────────────────────────┼──────────────────────────┼─────────────────────────────────────────┤
-│ d_restaurant_reviews     │ ⏸️  NO CHANGE            │ 13 new orders had no associated reviews  │
-│                          │                          │ — no input changed, no recompute needed  │
-├──────────────────────────┼──────────────────────────┼─────────────────────────────────────────┤
-│ customer_360             │ 🔁 FULL RECOMPUTE        │ Not partitioned by customer_id. Engine   │
-│                          │                          │ cost model chose full recompute.         │
-│                          │                          │ → Fix: add partition_col="customer_id"   │
-└──────────────────────────┴──────────────────────────┴─────────────────────────────────────────┘
 ```
 
 > Verified by querying the Databricks pipeline event logs: `SELECT details.incrementalization_mode FROM event_log('pipeline_id')`
@@ -838,179 +799,6 @@ Metastore (UAE North — one per region)
         ├── d_restaurant_reviews   ← materialized view
         └── customer_360           ← materialized view
 ```
-
----
-
-## 🚀 Setup & Prerequisites
-
-### Prerequisites
-
-| Requirement | Spec |
-|-------------|------|
-| Azure Databricks | Premium tier (required for Unity Catalog) |
-| Azure SQL Database | Standard tier or above |
-| Azure Event Hub | Standard tier (required for Kafka Surface) |
-| Databricks Runtime | 15.0 ML or above |
-| Python | 3.10+ (for data generator scripts) |
-| Databricks CLI | Latest version |
-
-### Step-by-Step Setup
-
-**1. Azure SQL Database**
-```sql
--- Run after uploading CSVs via DataGrip or Azure Data Studio
--- File: setup/enable_cdc.sql
-
-EXEC sys.sp_cdc_enable_db;
-
-EXEC sys.sp_cdc_enable_table @source_schema='dbo', @source_name='customers',      @role_name=NULL;
-EXEC sys.sp_cdc_enable_table @source_schema='dbo', @source_name='restaurants',    @role_name=NULL;
-EXEC sys.sp_cdc_enable_table @source_schema='dbo', @source_name='menu_items',     @role_name=NULL;
-EXEC sys.sp_cdc_enable_table @source_schema='dbo', @source_name='historical_orders', @role_name=NULL;
-EXEC sys.sp_cdc_enable_table @source_schema='dbo', @source_name='customer_reviews',  @role_name=NULL;
-```
-
-**2. Azure Event Hub**
-- Create namespace in UAE North, **Standard tier**
-- Create Event Hub named `orders`
-- Create two Shared Access Policies:
-  - `SendPolicy` — Send permission only → used by `order_generator.py`
-  - `ListenPolicy` — Listen permission only → used by Databricks
-
-**3. Unity Catalog + Schemas**
-```sql
--- File: setup/unity_catalog_setup.sql
-
-CREATE CATALOG IF NOT EXISTS ws_dbx_project;
-CREATE SCHEMA IF NOT EXISTS ws_dbx_project.00_landing;
-CREATE SCHEMA IF NOT EXISTS ws_dbx_project.01_bronze;
-CREATE SCHEMA IF NOT EXISTS ws_dbx_project.02_silver;
-CREATE SCHEMA IF NOT EXISTS ws_dbx_project.03_gold;
-
-GRANT USE CATALOG ON CATALOG ws_dbx_project TO data_engineers;
-GRANT ALL ON SCHEMA ws_dbx_project.01_bronze TO data_engineers;
-GRANT ALL ON SCHEMA ws_dbx_project.02_silver TO data_engineers;
-GRANT SELECT ON SCHEMA ws_dbx_project.03_gold TO analysts;
-```
-
-**4. Cluster Policy (Cost Optimization)**
-```bash
-# Create policy
-databricks cluster-policies create --json @setup/cluster_policy.json
-
-# Attach to LakeFlow gateway
-databricks pipelines update <GATEWAY_ID> --policy-id <POLICY_ID>
-```
-
-`setup/cluster_policy.json`:
-```json
-{
-  "name": "LakeFlow Minimal Compute",
-  "definition": {
-    "num_workers": { "type": "fixed", "value": 1 },
-    "node_type_id": { "type": "fixed", "value": "Standard_F4s" },
-    "driver_node_type_id": { "type": "fixed", "value": "Standard_E4ds_v4" }
-  }
-}
-```
-
-**5. Generate & Upload Synthetic Data**
-```bash
-cd synthetic_data/generators
-
-# Generate all static datasets
-python generate_restaurants.py
-python generate_customers.py
-python generate_menu_items.py
-python generate_historical_orders.py
-python generate_reviews.py
-
-# Upload CSVs to Azure SQL via DataGrip / Azure Data Studio
-# Then run enable_cdc.sql
-
-# Start live order stream (runs indefinitely, 1 order every 3s)
-python order_generator.py --connection-string "<Event Hub Send Policy>"
-```
-
-**6. Deploy Pipelines**
-- Create LakeFlow connection to Azure SQL in Databricks UI
-- Create Bronze + Silver LakeFlow ingestion pipelines
-- Deploy `ingestion/streaming/eventhub_bronze.py` as a Declarative Pipeline
-- Deploy Silver + Gold Declarative Pipelines
-- Create `workflow_daily_master` in Databricks Workflows linking all pipelines
-
----
-
-## 🧠 Key Engineering Decisions & Learnings
-
-### 1. LakeFlow Gateway Compute Policy (CLI-Only)
-
-The Databricks UI doesn't expose cluster policy configuration for LakeFlow Ingestion Gateways. The policy must be attached via the Databricks CLI. Default behaviour (auto-scale to 5 workers) left running continuously would cost ~5× more than necessary. **Lesson:** Always audit always-on infrastructure in a lakehouse — classic compute charges even when idle.
-
-### 2. Streaming Table vs Materialized View Mistake
-
-Early in development, a Gold aggregation table was built using `spark.readStream` instead of `spark.read`. The pipeline threw: `"AnalysisException: cannot create a streaming table with an append flow when the query contains aggregation."` **Lesson:** Streaming Tables are append-only — any aggregation (GROUP BY, SUM, COUNT) requires a Materialized View using `spark.read`.
-
-### 3. Average of Averages Trap
-
-The `d_sales_summary` table stores `avg_order_value` per day. On the dashboard, `SUM(avg_order_value)` or `AVG(avg_order_value)` across date ranges would produce an incorrect overall average (averages of averages are statistically biased unless all groups are equal size). The dashboard instead queries `AVG(total_amount)` directly from Silver's `fact_orders` for the overall AOV KPI. **Lesson:** Pre-aggregated Gold tables are for performance, not a replacement for row-level queries when true statistical accuracy is needed.
-
-### 4. Partitioning Drives Incremental Behaviour
-
-`d_sales_summary` is partitioned by `order_date`. When 13 new orders arrived for a single day, the engine identified the changed partition and recomputed only that date — not all 182 days. `customer_360` is NOT partitioned by `customer_id`, so the engine chose a full recompute. **Lesson:** Partition Gold Materialized Views by the natural temporal or entity key to enable incremental updates. This is verifiable by querying pipeline event logs.
-
-### 5. AI Output is Non-Deterministic — Always Add Constraints
-
-`AI_QUERY()` returns natural language strings. Even with a well-engineered prompt, an LLM can occasionally return malformed JSON or an unexpected sentiment label. A `CONSTRAINT` with `ON VIOLATION DROP ROW` protects downstream tables from invalid AI output without crashing the pipeline. **Lesson:** Treat LLM output as untrusted input, same as any external data source.
-
-### 6. `ROW_NUMBER` vs `RANK` for Top-N per Group
-
-Using `RANK()` for the favourite restaurant window function would return multiple restaurants per customer in the case of ties — breaking the one-row-per-customer contract required by `customer_360`. `ROW_NUMBER()` always assigns unique sequential numbers, guaranteeing exactly one result per partition group. **Lesson:** Choose window ranking functions deliberately — they have different tie-breaking behaviours with real consequences.
-
-### 7. Issue Columns from AI_QUERY Are Strings, Not Booleans
-
-`GET_JSON_OBJECT()` always returns a string, even when the JSON value is `true` or `false`. Dashboard queries comparing these values must use `= 'true'` (string comparison), not `= TRUE` (boolean). This is an easy bug to miss if you assume the parsed value inherits the JSON type. **Lesson:** Explicitly cast AI-extracted columns to the required type in Silver, or document the string representation for downstream consumers.
-
----
-
-## 📈 Results & Metrics
-
-### Pipeline Performance
-
-| Metric | Value |
-|--------|-------|
-| Total orders processed | 8,017 (8,000 historical + 17 live) |
-| Total order items | ~24,000 (avg 3 items per order) |
-| Reviews AI-enriched | 78 (100% classified) |
-| Customer profiles | 500 (customer_360) |
-| Daily summary rows | 182 (6 months) |
-| Data quality violations | **0** across 8,017 rows, 7 checks |
-| End-to-end latency | New order → visible in dashboard: < 5 minutes |
-
-### Cost Optimizations Applied
-
-| Optimization | Impact |
-|-------------|--------|
-| Cluster policy on LakeFlow gateway (1 worker vs 5) | ~80% reduction in ingestion compute cost |
-| Serverless compute for all pipelines | Pay only for active processing time |
-| d_sales_summary partitioned by order_date | Only changed date partitions recomputed |
-| Gold layer pre-aggregation | Dashboard queries hit 182 rows vs 8,000+ |
-| AI_QUERY on Foundation Models | ~1 DBU/million tokens — no model deployment cost |
-
----
-
-## 🔮 What I'd Do Differently in Production
-
-1. **Partition `customer_360` by `customer_id`** — flip it from full recompute to incremental
-2. **Add error handling for AI_QUERY non-conforming responses** — retry with a stricter prompt before dropping
-3. **Implement SCD Type 2 on dimension tables** — currently using Type 1 (upsert overwrites). Type 2 would preserve historical snapshots (e.g., track when a customer moved cities)
-4. **Set up monitoring and alerting** on pipeline failures and data quality drop rates — alert when drop rate exceeds 0.1%
-5. **Add data retention policies** — VACUUM Bronze tables after 90 days, archive to cold storage
-6. **CI/CD for pipeline code** — deploy pipeline changes through a Git-based workflow with pull request reviews
-7. **Add row-level security** in Unity Catalog — restrict restaurant managers to only see data for their own location
-8. **Dashboard caching and scheduled refresh** — AIBI dashboards re-query on each open by default; add query result caching for non-real-time widgets
-9. **Cost alerting** — set up Azure budget alerts and Databricks spend monitoring for the LakeFlow gateway
-10. **Comprehensive data lineage documentation** — tag all tables with owners, SLAs, and upstream dependencies in Unity Catalog
 
 ---
 
