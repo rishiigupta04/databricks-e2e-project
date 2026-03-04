@@ -15,7 +15,7 @@
 transforming them through a medallion architecture, enriching reviews with LLM sentiment analysis,
 and serving business insights through two interactive AIBI dashboards — all on Databricks.**
 
-[Architecture](#-architecture) • [Tech Stack](#-tech-stack) • [Data Model](#-data-model) • [Pipeline Stages](#-pipeline-stages) • [AI Integration](#-ai-integration) • [Dashboards](#-dashboards) • [Setup](#-setup--prerequisites) • [Key Learnings](#-key-engineering-decisions--learnings)
+[Architecture](#-architecture) • [Tech Stack](#-tech-stack) • [Data Model](#-data-model) • [Pipeline Stages](#-pipeline-stages) • [AI Integration](#-ai-integration) • [Dashboards](#-dashboards) 
 
 </div>
 
@@ -33,14 +33,10 @@ and serving business insights through two interactive AIBI dashboards — all on
    - [Bronze — Ingestion](#bronze--ingestion)
    - [Silver — Transformation](#silver--transformation)
    - [Gold — Aggregation](#gold--aggregation)
-8. [AI Integration — Sentiment Analysis](#-ai-integration--sentiment-analysis)
+8. [AI Integration — Sentiment Analysis](#-ai-integration)
 9. [Dashboards](#-dashboards)
 10. [Orchestration](#-orchestration)
 11. [Unity Catalog Structure](#-unity-catalog-structure)
-12. [Setup & Prerequisites](#-setup--prerequisites)
-13. [Key Engineering Decisions & Learnings](#-key-engineering-decisions--learnings)
-14. [Results & Metrics](#-results--metrics)
-15. [What I'd Do Differently in Production](#-what-id-do-differently-in-production)
 
 ---
 
