@@ -572,7 +572,7 @@ Silver Sources:
            │  is_vip (lifetime_spend >= 5000)                        │
            └────────────────────────────────────────────────────────┘
 ```
-```
+
 
 > Verified by querying the Databricks pipeline event logs: `SELECT details.incrementalization_mode FROM event_log('pipeline_id')`
 
